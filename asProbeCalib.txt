@@ -1,0 +1,35 @@
+===
+Probe normal:
+ x1 1.032564
+ x2 11.268681
+ y1 29.092419
+ y2 18.910304
+ xm 6.150622
+ ym 24.001361
+ diaX diaY diaXY 11.996117 12.012115 12.004116
+Probe rotated:
+ x1 1.062557
+ x2 11.299676
+ y1 29.098426
+ y2 18.920309
+ xm 6.181116
+ ym 24.009368
+ diaX diaY diaXY 11.997118 12.008117 12.002618
+Differences
+ x1 diff 0.029993
+ x2 diff 0.030995
+ y1 diff 0.006007
+ y2 diff 0.010006
+Correction Values
+ x1 corr 0.014997 <<<
+ x2 corr 0.015497 <<<
+   x avg 0.015247
+ y1 corr 0.003004 <<<
+ y2 corr 0.005003 <<<
+   y avg 0.004003
+Diameter Compensation
+ dia avg x 11.997118 
+ dia avg y 12.008117 
+ new probe dia for x 1.762882 <<<
+ new probe dia for y 1.821883 <<<
+ new probe dia   avg 1.792382 
