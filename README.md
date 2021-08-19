@@ -27,6 +27,7 @@ Just a collection of some of my LinuxCNC related scripts, G-code and other stuff
     - initial upload
     - added asProbeCalib
     - added asProbeCenterIn
+    - added asProbeCenterOut
 
 
 ---

@@ -1,0 +1,270 @@
+(FIND CYLINDER CENTER)
+
+(Finds the center of a cylinder parallel to the z axis, probe on top)
+(and moves the head to the calculated center.)
+(Also shows a debug message with the diameter of the cylinder.)
+(Can use probe calibration data for all four probing directions and )
+(as well probe diameter corrections, aka machine latency, for x and y.)
+
+
+( CHANGES V0.1 )
+(   - yo very old henlo )
+( fast forward 12 years :-)
+( CHANGES V1.0 )
+(   - finally a separate compensation for x and y; )
+(     requires results from asProbeCalib.ngc )
+(   - quick approach and slow meas now in o100, o110)
+
+
+(---------------------------------------------------------)
+(--- INIT                                                 )
+
+G21       (metric)
+G90       (absolute)
+G64 P0.05 (tool path precision)
+S0        (prepare spindle spee)
+M5        (spindle off, just in case)
+G4 P1     (wait for 1 second)
+
+
+(---------------------------------------------------------)
+(--- PARAMETERS                                           )
+
+
+#51 =  30.0    (probing diameter; must be larger than the test obj, together with #52)
+#52 =   5.0    (radius to add to probing diameter; just here bc it's easier to handle)
+#53 =  -5.0    (z depth of probe position; incremental, not absolute!)
+
+#80 =   0.014  (x1, left   touch correction value)
+#81 =   0.016  (x2, right  touch correction value)
+#85 =   0.002  (y1, top    touch correction value)
+#86 =   0.006  (y2, bottom touch correction value)
+
+#70 =   1.762  (probe stylus diameter x)
+#71 =   1.824  (probe stylus diameter y)
+
+#57 = 180      (feed rate for quick approach)
+#58 =  60      (feed rate for measurement)
+
+#59 =   1      (amount of probing runs)
+
+(The LOGAPPEND/-OPEN commands do NOT work with a tilde, e.g. ~/ncfiles/pdat.txt)
+(You either must specify an absolute path or only put the file name in here.)
+(For the latter, a file name, the results will be stored in the directory)
+(of your .ini file.)
+(LOGAPPEND,/home/<PATH_TO_YOUR_FOLDER>/asProbeCenterOut.txt)
+
+
+
+
+
+(---------------------------------------------------------)
+(--- NO CHANGES BELOW HERE                                )
+#50 =  [[#51 / 2]+#52]  (max probe distance is half dia + radius in #52)
+
+#100 = #5420   (store start x pos)
+#101 = #5421   (store start y pos)
+
+#200 = 0       (touch x left)
+#201 = 0       (touch x right)
+#210 = 0       (touch y top)
+#211 = 0       (touch y bot)
+
+#300 = 0       (x mid)
+#301 = 0       (y mid)
+
+#350 = 0       (diameter via x)
+#360 = 0       (diameter via y)
+#370 = 0       (diameter via xy)
+
+
+(---------------------------------------------------------)
+o100 sub
+
+  (--- GO LEFT TOUCH TO RIGHT ---)
+  F#57
+  G91           (incremental)
+  G00 X[#50 *-1] (go to the left fast)
+  G38.3 Z#53    (lower z, stop if we hit something)
+  o101 if [#5070 gt 0]
+    (DEBUG,touched sth; abort)
+    G00 z1
+    M2
+  o101 endif
+  G38.2 X#50    (touch x right)
+  G00 X-2
+  F#58
+  G38.2 X#50    (touch x right)
+  #200 = #5061  (store x right)
+  #200 = [#200 + #81]  (add corr x left)
+  G00 X-2       (go back a bit)
+  G00 Z[#53*-1] (and move out)
+  G90           (absolute)
+  G00 X#100     (back to start x)
+
+  (--- GO RIGHT TOUCH TO LEFT ---)
+  F#57
+  G91           (incremental)
+  G00 X#50      (go to the left fast)
+  G38.3 Z#53    (lower z, stop if we hit something)
+  o102 if [#5070 gt 0]
+    (DEBUG,touched sth; abort)
+    G00 z1
+    M2
+  o102 endif
+  G38.2 X[#50 * -1]   (touch x left)
+  G00 X2
+  F#58
+  G38.2 X[#50 * -1]   (touch x left)
+  #201 = #5061  (store x right)
+  #201 = [#201 + #80]  (add corr x left)
+  G00 X2        (go back a bit)
+  G00 Z[#53*-1] (move out)
+  G90           (absolute)
+  G00 X#100     (back to start x)
+
+o100 endsub
+
+
+(---------------------------------------------------------)
+o110 sub
+
+  (--- GO UP TOUCH DOWN ---)
+  F#57
+  G91           (incremental)
+  G00 Y#50      (go to the top fast)
+  G38.3 Z#53    (lower z, stop if we hit something)
+  o111 if [#5070 gt 0]
+    (DEBUG,touched sth; abort)
+    G00 z1
+    M2
+  o111 endif
+  G38.2 Y[#50*-1] (touch y down)
+  G00 Y2
+  F#58
+  G38.2 Y[#50*-1] (touch y down)
+  #210 = #5062  (store y top)
+  #210 = [#210 + #86]  (add corr y bot)
+  G00 Y2        (go back a bit)
+  G00 Z[#53*-1] (and move out)
+  G90           (absolute)
+  G00 Y#101     (back to start x)
+
+  (--- GO DOWN TOUCH UP ---)
+  F#57
+  G91           (incremental)
+  G00 Y[#50*-1] (go to the bot fast)
+  G38.3 Z#53    (lower z, stop if we hit something)
+  o112 if [#5070 gt 0]
+    (DEBUG,touched sth; abort)
+    G00 z1
+    M2
+  o112 endif
+  G38.2 Y#50    (touch y up)
+  G00 Y-2
+  F#58
+  G38.2 Y#50    (touch y up)
+  #211 = #5062  (store y bot)
+  #211 = [#211 + #85]  (add corr y top)
+  G00 Y-2       (go back a bit)
+  G00 Z[#53*-1] (and move out)
+  G90           (absolute)
+  G00 Y#101     (back to start x)
+
+o110 endsub
+
+
+
+(---------------------------------------------------------)
+o200 sub
+  (--- CALC AND SET NEW X CENTER POINT ---)
+  #300 = [[#201-#200]/2 + #200]   (new x mid)
+  #350 = [[#201-#200] - #70]      (dia via x)
+  #100 = #300
+o200 endsub
+
+
+(---------------------------------------------------------)
+o210 sub
+  (--- CALC AND SET NEW Y CENTER POINT ---)
+  #301 = [[#211-#210]/2 + #210]   (new y mid)
+  #360 = [[#210-#211] - #71]      (dia via y)
+  #101 = #301
+o210 endsub
+
+
+(---------------------------------------------------------)
+o205 sub
+  (--- CALC DIA USING X AND Y ---)
+  #370 = [[#350+#360]/2]          (dia via xy)
+o205 endsub
+
+
+(---------------------------------------------------------)
+(LOG,===)
+
+(feed rate now in o100 and o110)
+
+(make a quick x approach)
+o100 call 
+(calc new x center point and move to there)
+o200 call
+G00 x#100 y#101
+
+(make a quick y approach)
+o110 call 
+(calc new x center point and move to there)
+o210 call
+G00 x#100 y#101
+
+(make a quick x approach again, now with better y)
+o100 call 
+(calc new x center point and move to there)
+o200 call
+G00 x#100 y#101
+
+(make the measurements)
+#40 = 0
+o500 while [#40 lt #59]
+
+  ( probe x)
+  o100 call
+  o200 call
+  G00 x#100 y#101
+
+  ( probe y)
+  o110 call
+  o210 call
+  G00 x#100 y#101
+
+  ( calc dia from both)
+  o205 call
+
+  (LOG, Probe no [#40] )
+  (LOG, x1 #200)
+  (LOG, x2 #201)
+  (LOG, y1 #210)
+  (LOG, y2 #211)
+  (LOG, xm #300)
+  (LOG, ym #301)
+  (LOG, diaX diaY diaXY #350 #360 #370)
+
+  (DEBUG, dia #350 #360)
+
+  (chance to rotate the probe)
+  o510 if [#40 lt #59-1]
+(    M0)
+  o510 endif
+
+  #40 = [#40 + 1]
+o500 endwhile
+
+
+(LOGCLOSE)
+
+
+(---------------------------------------------------------)
+(--- END                                                  )
+
+M2  (end program)
+
