@@ -25,6 +25,8 @@ Just a collection of some of my LinuxCNC related scripts, G-code and other stuff
 
 ### CHANGES 2021/08/XX:
     - initial upload
+    - added asProbeCalib
+    - added asProbeCenterIn
 
 
 ---

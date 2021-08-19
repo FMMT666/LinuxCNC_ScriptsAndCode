@@ -1,17 +1,27 @@
-(PROBE CALIBRATION)
+(FIND HOLE CENTER)
 
-(Calculates correction values for touch coordinates, to center as best as possible and also)
-(tries to find the best x/y probe diameter values; important to determine distances or diameters.)
-(This will _not_ compensate any machine related errors, only the probing differences that)
-(might occur when you touch the same point with the probe rotated by 180 degrees.)
-(Aka known as the 120-degrees-probe-arms vs. 90-degrees-table-probing problem.)
-(The values are written to the log file, correction values are marked with '<<<'.)
-(The algorithm was written to probe a round hole, e.g. a ball bearing or comparable.)
+(Finds the center of a hole and moves the head to this position.)
+(Also shows a debug message with the diameter of the hole.)
+(Can use probe calibration data for all four probing directions and )
+(as well probe diameter corrections, aka machine latency, for x and y.)
 
 
-( CHANGES V1.0 )
+( CHANGES V0.1 )
 (   - initial version )
-(   - uses code from center routine; might contain unused code or params and other strage things )
+(   - working, but precision and speed could be improved )
+( CHANGES V0.2 )
+(   - probing now in subroutine )
+(   - quicker initial mid guessing )
+(   - only the measurements after the quick guess are averaged )
+(   - pasue to give user the chance to rotate the probe )
+( CHANGES V0.3 )
+(   - split probe subroutine in 2 for x and y )
+(   - now probing -x x y -y instead of going in a circle )
+(   - new quick y now with already precise x center )
+( fast forward 12 years :-)
+( CHANGES V1.0 )
+(   - finally a separate compensation for x and y; )
+(     requires results from asProbeCalib.ngc )
 
 
 (---------------------------------------------------------)
@@ -22,59 +32,46 @@ G90       (absolute)
 G64 P0.05 (tool path precision)
 S0        (prepare spindle spee)
 M5        (spindle off, just in case)
-G4 P1     (wait for one second)
+G4 P1     (wait for 1 second)
 
 
 (---------------------------------------------------------)
 (--- PARAMETERS                                           )
 
-#60 =  12.0   (diameter of the test object)
-#70 =   1.76  (probe stylus diameter x, initial guess)
-#71 =   1.83  (probe stylus diameter y, initial guess)
+#50 =  20.0    (max probe distance)
 
-#53 = 180     (feed rate for quick approach)
-#54 =  60     (feed rate for measurement)
-#50 =  20.0   (max probe distance)
+#80 =   0.014  (x1, left   touch correction value)
+#81 =   0.016  (x2, right  touch correction value)
+#85 =   0.002  (y1, top    touch correction value)
+#86 =   0.006  (y2, bottom touch correction value)
+
+#70 =   1.762  (probe stylus diameter x)
+#71 =   1.824  (probe stylus diameter y)
+
+#53 = 180      (feed rate for quick approach)
+#54 =  60      (feed rate for measurement)
+
+#52 =   1      (amount of probing runs)
 
 (The LOGAPPEND/-OPEN commands do NOT work with a tilde, e.g. ~/ncfiles/pdat.txt)
 (You either must specify an absolute path or only put the file name in here.)
 (For the latter, a file name, the results will be stored in the directory)
 (of your .ini file.)
-(LOGAPPEND,/home/<PATH_TO_YOUR_FOLDER>/asProbeCalib.txt)
+(LOGAPPEND,/home/<PATH_TO_YOUR_FOLDER>/asProbeCenterIn.txt)
+
 
 
 
 
 (---------------------------------------------------------)
 (--- NO CHANGES BELOW HERE                                )
-
-#52  = 2       (2 runs: probe at 0 degree and then 180)
-
 #100 = #5420   (store start x pos)
 #101 = #5421   (store start y pos)
 
-#200 = 0       (touch x left )
+#200 = 0       (touch x left)
 #201 = 0       (touch x right)
-#205 = 0       (touch y top)
-#206 = 0       (touch y bot)
-
-#210 = 0       (1st touch x left)
-#211 = 0       (1st touch x right)
-#215 = 0       (1st touch y top)
-#216 = 0       (1st touch y bot)
-
-#220 = 0       (diff x left)
-#221 = 0       (diff x right)
-#225 = 0       (diff y top)
-#226 = 0       (diff y bot)
-
-#230 = 0       (corr x left)
-#231 = 0       (corr x right)
-#235 = 0       (corr y top)
-#236 = 0       (corr y bot)
-
-#240 = 0       (corr x avg)
-#245 = 0       (corr y avg)
+#210 = 0       (touch y top)
+#211 = 0       (touch y bot)
 
 #300 = 0       (x mid)
 #301 = 0       (y mid)
@@ -82,12 +79,6 @@ G4 P1     (wait for one second)
 #350 = 0       (diameter via x)
 #360 = 0       (diameter via y)
 #370 = 0       (diameter via xy)
-
-#400 = 0
-#401 = 0
-#402 = 0
-#403 = 0
-#404 = 0
 
 
 (---------------------------------------------------------)
@@ -98,6 +89,7 @@ o100 sub
   G38.2 X[#50 * -1]   (touch x left)
   G90           (absolute)
   #200 = #5061  (store x left)
+  #200 = [#200 + #80]  (add corr x left)
   G00 X#100     (back to start x)
 
   (--- TOUCH RIGHT ---)
@@ -105,6 +97,7 @@ o100 sub
   G38.2 X#50    (touch x right)
   G90           (absolute)
   #201 = #5061  (store x right)
+  #201 = [#201 + #81]  (add corr x right)
   G00 X#100     (back to start x)
 
 o100 endsub
@@ -117,14 +110,16 @@ o101 sub
   G91           (incremental)
   G38.2 Y#50    (touch y top)
   G90           (absolute)
-  #205 = #5062  (store y top)
+  #210 = #5062  (store y top)
+  #210 = [#210 + #85]  (add corr y top)
   G00 Y#101     (back to start y)
 
   (--- TOUCH BOT ---)
   G91           (incremental)
   G38.2 Y[#50 * -1]  (touch y bot)
   G90           (absolute)
-  #206 = #5062  (store y bot)
+  #211 = #5062  (store y bot)
+  #211 = [#211 + #86]  (add corr y bot)
   G00 Y#101     (back to start y)
 
 o101 endsub
@@ -143,8 +138,8 @@ o200 endsub
 (---------------------------------------------------------)
 o201 sub
   (--- CALC AND SET NEW Y CENTER POINT ---)
-  #301 = [[#206-#205]/2 + #205]   (new y mid)
-  #360 = [[#205-#206] + #71]      (dia via y)
+  #301 = [[#211-#210]/2 + #210]   (new y mid)
+  #360 = [[#210-#211] + #71]      (dia via y)
   #101 = #301
 o201 endsub
 
@@ -157,19 +152,9 @@ o205 endsub
 
 
 (---------------------------------------------------------)
-o210 sub
-  (--- COPY CURRENT X/Y COORDS TO SAVE PLACE ---)
-  #210 = #200
-  #211 = #201
-  #215 = #205
-  #216 = #206
-o210 endsub
-
-
-
-(---------------------------------------------------------)
-(quick approach feed rate)
 (LOG,===)
+
+(quick approach feed rate)
 F#53
 
 (make a quick x approach)
@@ -184,7 +169,7 @@ o101 call
 o201 call
 G00 x#100 y#101
 
-(now quick x again, for a better x result)
+(now quick x again, for a better result)
 o100 call 
 (calc new x center point and move to there)
 o200 call
@@ -211,71 +196,19 @@ o500 while [#40 lt #52]
   ( calc dia from both)
   o205 call
 
-  (log all these tings)
-  o510 if [#40 eq 0]
-    (LOG,Probe normal:)
-  o510 else
-    (LOG,Probe rotated:)
-  o510 endif
+  (LOG, Probe no [#40] )
   (LOG, x1 #200)
   (LOG, x2 #201)
-  (LOG, y1 #205)
-  (LOG, y2 #206)
+  (LOG, y1 #210)
+  (LOG, y2 #211)
   (LOG, xm #300)
   (LOG, ym #301)
   (LOG, diaX diaY diaXY #350 #360 #370)
 
-  (store values and rotate probe by 180 degrees)
-  o520 if [#40 lt #52-1]
-    o210 call
-    M0
-  o520 endif
+  (DEBUG, dia #350 #360)
 
   #40 = [#40 + 1]
 o500 endwhile
-
-
-(CALCULATE THE RESULTS)
-#220 = [#200 - #210]
-#221 = [#201 - #211]
-#225 = [#205 - #215]
-#226 = [#206 - #216]
-#230 = [#220 / 2]
-#231 = [#221 / 2]
-#235 = [#225 / 2]
-#236 = [#226 / 2]
-#240 = [[#230 + #231] / 2]
-#245 = [[#235 + #236] / 2]
-
-(LOG,Differences)
-(LOG, x1 diff #220)
-(LOG, x2 diff #221)
-(LOG, y1 diff #225)
-(LOG, y2 diff #226)
-
-(LOG,Correction Values)
-(LOG, x1 corr #230 <<<)
-(LOG, x2 corr #231 <<<)
-(LOG,   x avg #240) 
-(LOG, y1 corr #235 <<<)
-(LOG, y2 corr #236 <<<)
-(LOG,   y avg #245) 
-
-(now compensate ball diameter)
-#400 = [[#201 + #240] - [#200 + #240] + #70 ]
-#401 = [[#205 + #245] - [#206 + #245] + #71 ]
-
-(LOG,Diameter Compensation)
-(LOG, dia avg x #400 )
-(LOG, dia avg y #401 )
-
-#402 = [ #70 - [ #400 - #60] ]
-#403 = [ #71 - [ #401 - #60] ]
-#404 = [[ #402 + #403 ] / 2 ]
-(LOG, new probe dia for x #402 <<<)
-(LOG, new probe dia for y #403 <<<)
-(LOG, new probe dia   avg #404 )
-
 
 
 (LOGCLOSE)
